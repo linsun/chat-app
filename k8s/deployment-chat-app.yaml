@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-app
+  namespace: music
+  labels:
+    app: chat-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-app
+  template:
+    metadata:
+      labels:
+        app: chat-app
+    spec:
+      # Optional: Use hostNetwork to access localhost services directly
+      # Uncomment the line below if host.docker.internal doesn't work
+      # hostNetwork: true
+      containers:
+      - name: chat-app
+        image: linsun/chat-app:v1  # Update with your registry
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8501
+          name: http
+        env:
+          - name: OLLAMA_BASE_URL
+            # value: "http://host.docker.internal:3000"
+            value: "http://host.docker.internal:11434"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
