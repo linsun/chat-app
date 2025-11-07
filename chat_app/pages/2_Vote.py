@@ -147,6 +147,13 @@ if "user_voted" not in st.session_state:
 if "user_choice" not in st.session_state:
     st.session_state.user_choice = None
 
+# Initialize music playback state
+if "music_playing" not in st.session_state:
+    st.session_state.music_playing = False
+
+if "music_winner" not in st.session_state:
+    st.session_state.music_winner = None
+
 # Load current votes from database
 votes = load_votes()
 
@@ -244,13 +251,45 @@ if total_votes > 0:
     # Winner
     st.markdown("---")
     if votes["classic_music"] > votes["rock_music"]:
+        winner = "classic_music"
         st.success(f"🏆 **Classic Music is winning!** ({votes['classic_music']} vs {votes['rock_music']})")
     elif votes["rock_music"] > votes["classic_music"]:
+        winner = "rock_music"
         st.success(f"🏆 **Rock Music is winning!** ({votes['rock_music']} vs {votes['classic_music']})")
     else:
+        winner = None
         st.info("🤝 **It's a tie!** Both genres have the same number of votes.")
     
     st.markdown(f"**Total Votes:** {total_votes}")
+    
+    # Music playback section
+    st.markdown("---")
+    st.markdown("### 🎵 Play Winning Music")
+    
+    # Determine music track based on winner
+    if winner == "classic_music":
+        music_track = "roa-music-moonlight.mp3"
+    elif winner == "rock_music":
+        music_track = "Dust_in_the_wind.mp3"
+    else:
+        music_track = None
+    
+    # Music control button
+    if st.button("▶️ Play Music", disabled=winner is None or music_track is None, use_container_width=True):
+        st.session_state.music_playing = True
+        st.session_state.music_winner = winner
+        st.rerun()
+    
+    # Display audio player if music is playing
+    if st.session_state.music_playing and st.session_state.music_winner == winner and music_track:
+        audio_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), music_track)
+        
+        if os.path.exists(audio_path):
+            st.audio(audio_path, autoplay=True)
+            st.info(f"🎵 Now playing: {music_track}")
+        else:
+            st.error(f"Audio file not found: {audio_path}")
+            st.session_state.music_playing = False
 else:
     st.info("👆 Cast your vote above to see the results!")
 
