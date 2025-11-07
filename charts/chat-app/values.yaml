@@ -6,7 +6,7 @@ replicaCount: 1
 image:
   repository: linsun/chat-app
   pullPolicy: Always
-  tag: "v2"
+  tag: "v3"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -65,16 +65,21 @@ env:
   - name: OLLAMA_BASE_URL
     value: "http://host.docker.internal:11434"
 
-# Namespace to deploy to (must exist beforehand)
-namespace: music
-
-# Persistent volume for shared database (required for multiple replicas)
-persistence:
+# Redis configuration (for vote counting - shared across all replicas)
+redis:
   enabled: true
-  storageClass: ""  # Use default storage class if empty
-  accessMode: ReadWriteMany  # Required for multiple replicas to share the volume
-  size: 1Gi
-  mountPath: /app/data  # Where the database will be stored
+  image:
+    tag: "latest"
+  # Redis subchart configuration (Bitnami Redis)
+  auth:
+    enabled: false  # Set to true for production
+    password: ""  # Set password if auth.enabled is true
+  architecture: standalone  # Use standalone for simplicity
+  master:
+    persistence:
+      enabled: false  # Disable persistence for simplicity (data in memory)
+  # Custom values for Redis subchart
+  db: 0  # Redis database number
 
 nodeSelector: {}
 

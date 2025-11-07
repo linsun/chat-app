@@ -13,15 +13,25 @@ helm repo update
 
 ### Install the chart
 
+**First, update dependencies** (downloads the Redis subchart):
 ```bash
-helm install my-chat-app ./charts/chat-app
+cd charts/chat-app
+helm dependency update
+cd ../..
+```
+
+Then install:
+```bash
+helm install my-chat-app ./charts/chat-app -n <namespace>
 ```
 
 Or with custom values:
 
 ```bash
-helm install my-chat-app ./charts/chat-app -f my-values.yaml
+helm install my-chat-app ./charts/chat-app -n <namespace> -f my-values.yaml
 ```
+
+**Note:** Redis is automatically deployed as a subchart when you install. The Redis deployment and service are created by the Bitnami Redis Helm chart, not manually.
 
 ## Configuration
 
@@ -36,11 +46,8 @@ The following table lists the configurable parameters and their default values:
 | `service.type` | Service type | `ClusterIP` |
 | `service.port` | Service port | `80` |
 | `service.targetPort` | Container port | `8501` |
-| `namespace` | Namespace to deploy to (must exist) | `music` |
-| `persistence.enabled` | Enable persistent volume for shared database | `true` |
-| `persistence.size` | Size of persistent volume | `1Gi` |
-| `persistence.storageClass` | Storage class (empty for default) | `""` |
-| `persistence.accessMode` | Access mode (ReadWriteMany for multiple replicas) | `ReadWriteMany` |
+| `redis.enabled` | Enable Redis for vote counting (shared across replicas) | `true` |
+| `redis.auth.enabled` | Enable Redis authentication | `false` |
 | `env` | Environment variables | See values.yaml |
 | `resources` | Resource requests/limits | See values.yaml |
 
@@ -79,20 +86,37 @@ Publish to Artifact Hub by:
 
 ## Multiple Replicas
 
-**Yes, Streamlit works with multiple replicas!** The chart is configured to support multiple replicas by default:
+**Yes, Streamlit works with multiple replicas!** The chart uses **Redis** for shared vote counting, which works perfectly with multiple replicas:
 
-- A PersistentVolume is automatically created to share the SQLite database across all replicas
-- The volume uses `ReadWriteMany` access mode so all pods can access it simultaneously
-- SQLite is configured with WAL (Write-Ahead Logging) mode for better concurrency
+- **Redis** is automatically deployed as a subchart (Bitnami Redis)
+- All replicas connect to the same Redis instance for shared vote counts
+- No persistent volumes needed - Redis handles shared state in memory
+- Works on any Kubernetes cluster (including kind)
+
+### Deploy with Multiple Replicas
 
 To deploy with 3 replicas:
 ```bash
-helm install my-chat-app ./charts/chat-app --set replicaCount=3
+helm install my-chat-app ./charts/chat-app --namespace default --set replicaCount=3
 ```
 
-**Note:** Your Kubernetes cluster must support `ReadWriteMany` volumes. If your storage class doesn't support it, you may need to:
-- Use a different storage class that supports ReadWriteMany (e.g., NFS, CephFS)
-- Or set `persistence.enabled: false` and use only 1 replica
+**That's it!** Redis will be automatically deployed and all replicas will share vote counts.
+
+### Redis Configuration
+
+By default, Redis runs without authentication and persistence (data in memory). For production:
+
+```bash
+helm install my-chat-app ./charts/chat-app -n music \
+  --set replicaCount=3 \
+  --set redis.auth.enabled=true \
+  --set redis.master.persistence.enabled=true
+```
+
+**Note:** 
+- Redis data is stored in memory by default (fast, but lost on restart)
+- Enable `redis.master.persistence.enabled=true` for data persistence
+- Enable `redis.auth.enabled=true` for production security
 
 ## Usage Example
 
@@ -104,16 +128,11 @@ kubectl create namespace music
 ```yaml
 # custom-values.yaml
 replicaCount: 3
-namespace: my-namespace
 image:
   repository: myregistry/chat-app
   tag: "v3"
 service:
   type: LoadBalancer
-persistence:
-  enabled: true
-  size: 2Gi
-  storageClass: "nfs-client"  # Use a storage class that supports ReadWriteMany
 env:
   - name: OLLAMA_BASE_URL
     value: "http://ollama-service:11434"
@@ -121,6 +140,6 @@ env:
 
 Then install:
 ```bash
-helm install my-chat-app ./charts/chat-app -f custom-values.yaml
+helm install my-chat-app ./charts/chat-app -n music -f custom-values.yaml
 ```
 

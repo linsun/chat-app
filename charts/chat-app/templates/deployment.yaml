@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "chat-app.fullname" . }}
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "chat-app.labels" . | nindent 4 }}
 spec:
@@ -44,9 +44,22 @@ spec:
         - name: {{ .name }}
           value: {{ .value | quote }}
         {{- end }}
-        {{- if .Values.persistence.enabled }}
-        - name: VOTES_DB
-          value: "{{ .Values.persistence.mountPath }}/votes.db"
+        {{- if .Values.redis.enabled }}
+        - name: REDIS_HOST
+          value: {{ .Release.Name }}-redis-master
+        - name: REDIS_PORT
+          value: "6379"
+        {{- if .Values.redis.auth.enabled }}
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-redis
+              key: redis-password
+        {{- end }}
+        {{- if .Values.redis.db }}
+        - name: REDIS_DB
+          value: {{ .Values.redis.db | quote }}
+        {{- end }}
         {{- end }}
         {{- if .Values.resources }}
         resources:
@@ -60,17 +73,6 @@ spec:
         readinessProbe:
           {{- toYaml .Values.readinessProbe | nindent 10 }}
         {{- end }}
-        {{- if .Values.persistence.enabled }}
-        volumeMounts:
-        - name: data
-          mountPath: {{ .Values.persistence.mountPath }}
-        {{- end }}
-      {{- if .Values.persistence.enabled }}
-      volumes:
-      - name: data
-        persistentVolumeClaim:
-          claimName: {{ include "chat-app.fullname" . }}-pvc
-      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

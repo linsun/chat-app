@@ -6,7 +6,7 @@ metadata:
   labels:
     app: chat-app
 spec:
-  replicas: 1  # Can be increased to 3+ with the shared PersistentVolume
+  replicas: 2  # Can be increased to 3+ with the shared PersistentVolume
   selector:
     matchLabels:
       app: chat-app
@@ -20,7 +20,7 @@ spec:
       # hostNetwork: true
       containers:
       - name: chat-app
-        image: linsun/chat-app:v2  # Update with your registry
+        image: linsun/chat-app:v3  # Update with your registry
         imagePullPolicy: Always
         ports:
         - containerPort: 8501

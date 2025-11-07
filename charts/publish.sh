@@ -9,7 +9,12 @@ VERSION=$(grep '^version:' ${CHART_DIR}/Chart.yaml | awk '{print $2}')
 
 echo "📦 Packaging Helm chart ${CHART_NAME} version ${VERSION}..."
 
+# Update dependencies (downloads Redis subchart)
+echo "📥 Updating chart dependencies..."
+helm dependency update ${CHART_DIR}
+
 # Package the chart
+echo "📦 Packaging chart..."
 helm package ${CHART_DIR}
 
 # Create or update index

@@ -1,141 +1,144 @@
 import streamlit as st
-import sqlite3
+import redis
 import os
 import time
-from contextlib import contextmanager
+import logging
 
-# Database file to store votes (shared across all clients)
-VOTES_DB = os.getenv("VOTES_DB", "votes.db")
-# Flag file to track if votes have been reset on app startup
-APP_STARTED_FLAG = os.getenv("APP_STARTED_FLAG", "app_started.flag")
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-@contextmanager
-def get_db_connection():
-    """Get database connection with proper error handling"""
-    conn = sqlite3.connect(VOTES_DB, timeout=10.0)  # 10 second timeout for concurrent access
-    conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
+# Redis configuration
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
+REDIS_DB = int(os.getenv("REDIS_DB", "0"))
+
+# Initialize Redis connection
+@st.cache_resource
+def get_redis_client():
+    """Get Redis client (cached per session)"""
     try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+        client = redis.Redis(
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            password=REDIS_PASSWORD,
+            db=REDIS_DB,
+            decode_responses=True,  # Automatically decode responses to strings
+            socket_connect_timeout=5,
+            socket_timeout=5,
+            retry_on_timeout=True
+        )
+        # Test connection
+        client.ping()
+        return client
+    except Exception as e:
+        st.error(f"Failed to connect to Redis: {str(e)}")
+        return None
 
-def init_database():
-    """Initialize the database with votes table"""
-    with get_db_connection() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS votes (
-                choice TEXT PRIMARY KEY,
-                count INTEGER DEFAULT 0
-            )
-        """)
-        # Initialize with default values if table is empty
-        cursor = conn.execute("SELECT COUNT(*) FROM votes")
-        if cursor.fetchone()[0] == 0:
-            conn.execute("INSERT INTO votes (choice, count) VALUES ('classic_music', 0)")
-            conn.execute("INSERT INTO votes (choice, count) VALUES ('rock_music', 0)")
+def init_votes():
+    """Initialize vote counts in Redis if they don't exist"""
+    redis_client = get_redis_client()
+    if redis_client is None:
+        return
+    
+    try:
+        # Initialize if keys don't exist
+        if not redis_client.exists("votes:classic_music"):
+            redis_client.set("votes:classic_music", 0)
+        if not redis_client.exists("votes:rock_music"):
+            redis_client.set("votes:rock_music", 0)
+    except Exception as e:
+        st.error(f"Error initializing votes: {str(e)}")
 
 def load_votes():
-    """Load votes from database"""
-    init_database()
-    with get_db_connection() as conn:
-        cursor = conn.execute("SELECT choice, count FROM votes")
-        votes = {row[0]: row[1] for row in cursor.fetchall()}
-        # Ensure both choices exist
-        if "classic_music" not in votes:
-            votes["classic_music"] = 0
-        if "rock_music" not in votes:
-            votes["rock_music"] = 0
-        return votes
+    """Load votes from Redis"""
+    redis_client = get_redis_client()
+    if redis_client is None:
+        # Return default values if Redis is unavailable
+        return {"classic_music": 0, "rock_music": 0}
+    
+    try:
+        classic_votes = int(redis_client.get("votes:classic_music") or 0)
+        rock_votes = int(redis_client.get("votes:rock_music") or 0)
+        return {
+            "classic_music": classic_votes,
+            "rock_music": rock_votes
+        }
+    except Exception as e:
+        st.error(f"Error loading votes: {str(e)}")
+        return {"classic_music": 0, "rock_music": 0}
 
 def increment_vote(choice):
-    """Increment vote count for a choice (thread-safe with SQLite)"""
-    init_database()
-    max_retries = 5
-    retry_delay = 0.1
+    """Increment vote count for a choice (atomic operation in Redis)"""
+    redis_client = get_redis_client()
+    if redis_client is None:
+        return load_votes()
     
-    for attempt in range(max_retries):
-        try:
-            with get_db_connection() as conn:
-                # Use SQLite's atomic increment
-                conn.execute("""
-                    INSERT INTO votes (choice, count) 
-                    VALUES (?, 1)
-                    ON CONFLICT(choice) DO UPDATE SET count = count + 1
-                """, (choice,))
-                conn.commit()
-                return load_votes()
-        except sqlite3.OperationalError as e:
-            if "locked" in str(e).lower() and attempt < max_retries - 1:
-                # Database is locked, retry with exponential backoff
-                time.sleep(retry_delay * (2 ** attempt))
-                continue
-            else:
-                st.error(f"Database error: {str(e)}")
-                return load_votes()
-        except Exception as e:
-            st.error(f"Error incrementing vote: {str(e)}")
-            return load_votes()
-    
-    # If all retries failed, return current votes
-    return load_votes()
+    try:
+        # Redis INCR is atomic, perfect for vote counting
+        redis_client.incr(f"votes:{choice}")
+        new_count = int(redis_client.get(f"votes:{choice}") or 0)
+        logger.info(f"Vote recorded: {choice} - New count: {new_count}")
+        return load_votes()
+    except Exception as e:
+        logger.error(f"Error incrementing vote for {choice}: {str(e)}")
+        st.error(f"Error incrementing vote: {str(e)}")
+        return load_votes()
 
 def decrement_vote(choice):
-    """Decrement vote count for a choice (thread-safe with SQLite)"""
-    init_database()
-    max_retries = 5
-    retry_delay = 0.1
+    """Decrement vote count for a choice (atomic operation in Redis)"""
+    redis_client = get_redis_client()
+    if redis_client is None:
+        return load_votes()
     
-    for attempt in range(max_retries):
-        try:
-            with get_db_connection() as conn:
-                # Use SQLite's atomic decrement
-                conn.execute("""
-                    UPDATE votes 
-                    SET count = MAX(0, count - 1)
-                    WHERE choice = ? AND count > 0
-                """, (choice,))
-                conn.commit()
-                return load_votes()
-        except sqlite3.OperationalError as e:
-            if "locked" in str(e).lower() and attempt < max_retries - 1:
-                # Database is locked, retry with exponential backoff
-                time.sleep(retry_delay * (2 ** attempt))
-                continue
-            else:
-                st.error(f"Database error: {str(e)}")
-                return load_votes()
-        except Exception as e:
-            st.error(f"Error decrementing vote: {str(e)}")
-            return load_votes()
-    
-    # If all retries failed, return current votes
-    return load_votes()
+    try:
+        # Use DECR and ensure it doesn't go below 0
+        current = int(redis_client.get(f"votes:{choice}") or 0)
+        if current > 0:
+            redis_client.decr(f"votes:{choice}")
+            new_count = int(redis_client.get(f"votes:{choice}") or 0)
+            logger.info(f"Vote removed: {choice} - New count: {new_count}")
+        return load_votes()
+    except Exception as e:
+        logger.error(f"Error decrementing vote for {choice}: {str(e)}")
+        st.error(f"Error decrementing vote: {str(e)}")
+        return load_votes()
 
 def reset_all_votes():
     """Reset all votes to zero"""
-    init_database()
-    with get_db_connection() as conn:
-        conn.execute("UPDATE votes SET count = 0")
-        conn.commit()
+    redis_client = get_redis_client()
+    if redis_client is None:
+        return
+    
+    try:
+        redis_client.set("votes:classic_music", 0)
+        redis_client.set("votes:rock_music", 0)
+        logger.info("All votes reset to zero")
+    except Exception as e:
+        logger.error(f"Error resetting votes: {str(e)}")
+        st.error(f"Error resetting votes: {str(e)}")
 
 def check_and_reset_on_startup():
-    """Reset votes if app just started (flag file doesn't exist)"""
-    if not os.path.exists(APP_STARTED_FLAG):
-        # App just started, reset votes
-        reset_all_votes()
-        # Create flag file to indicate app has started
-        try:
-            with open(APP_STARTED_FLAG, 'w') as f:
-                f.write("")
-        except Exception:
-            pass  # Ignore errors creating flag file
+    """Reset votes if app just started (check Redis flag)"""
+    redis_client = get_redis_client()
+    if redis_client is None:
+        return
+    
+    try:
+        if not redis_client.exists("app:started"):
+            # App just started, reset votes
+            reset_all_votes()
+            # Set flag to indicate app has started
+            redis_client.set("app:started", "1")
+    except Exception as e:
+        st.error(f"Error checking startup flag: {str(e)}")
 
-# Initialize database
-init_database()
+# Initialize votes
+init_votes()
 
 # Reset votes on app startup if needed
 check_and_reset_on_startup()
@@ -154,7 +157,7 @@ if "music_playing" not in st.session_state:
 if "music_winner" not in st.session_state:
     st.session_state.music_winner = None
 
-# Load current votes from database
+# Load current votes from Redis
 votes = load_votes()
 
 st.title("🎵 Music Preference Vote")
@@ -210,7 +213,7 @@ with col2:
 
 st.markdown("---")
 
-# Reload votes to get latest from database (in case other clients voted)
+# Reload votes to get latest from Redis (in case other clients voted)
 votes = load_votes()
 
 # Display results

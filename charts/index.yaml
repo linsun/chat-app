@@ -2,10 +2,35 @@ apiVersion: v1
 entries:
   chat-app:
   - apiVersion: v2
-    appVersion: v2
-    created: "2025-11-07T10:15:34.206976-05:00"
+    appVersion: v3
+    created: "2025-11-07T14:12:52.794218-05:00"
+    dependencies:
+    - condition: redis.enabled
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 22.0.7
     description: A Helm chart for the Chat App with music voting functionality
-    digest: 369db9f90ddd46f6e8a37c646ec42e0f0c31cb59ab6b706de7d10a84ebfdd213
+    digest: ecfc66c52edee1d610ca9d6b4c09595622c6b68b9e6583c88fe91da3f6a844b9
+    home: https://github.com/linsun/chat-app
+    keywords:
+    - streamlit
+    - chat
+    - voting
+    - music
+    maintainers:
+    - name: linsun
+    name: chat-app
+    sources:
+    - https://github.com/linsun/chat-app
+    type: application
+    urls:
+    - https://linsun.github.io/chat-app-charts/chat-app-0.2.0.tgz
+    version: 0.2.0
+  - apiVersion: v2
+    appVersion: v2
+    created: "2025-11-07T14:12:52.789682-05:00"
+    description: A Helm chart for the Chat App with music voting functionality
+    digest: 8cf3c1dbd43eb0aae56556a1cdddbea95d19e842b86f26c7d43fd725bf0a394e
     home: https://github.com/linsun/chat-app
     keywords:
     - streamlit
@@ -21,4 +46,4 @@ entries:
     urls:
     - https://linsun.github.io/chat-app-charts/chat-app-0.1.0.tgz
     version: 0.1.0
-generated: "2025-11-07T10:15:34.206455-05:00"
+generated: "2025-11-07T14:12:52.788013-05:00"
