@@ -1,0 +1,24 @@
+apiVersion: v1
+entries:
+  chat-app:
+  - apiVersion: v2
+    appVersion: v2
+    created: "2025-11-07T10:15:34.206976-05:00"
+    description: A Helm chart for the Chat App with music voting functionality
+    digest: 369db9f90ddd46f6e8a37c646ec42e0f0c31cb59ab6b706de7d10a84ebfdd213
+    home: https://github.com/linsun/chat-app
+    keywords:
+    - streamlit
+    - chat
+    - voting
+    - music
+    maintainers:
+    - name: linsun
+    name: chat-app
+    sources:
+    - https://github.com/linsun/chat-app
+    type: application
+    urls:
+    - https://linsun.github.io/chat-app-charts/chat-app-0.1.0.tgz
+    version: 0.1.0
+generated: "2025-11-07T10:15:34.206455-05:00"

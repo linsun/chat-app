@@ -6,7 +6,7 @@ metadata:
   labels:
     app: chat-app
 spec:
-  replicas: 1
+  replicas: 1  # Can be increased to 3+ with the shared PersistentVolume
   selector:
     matchLabels:
       app: chat-app
@@ -29,6 +29,11 @@ spec:
           - name: OLLAMA_BASE_URL
             # value: "http://host.docker.internal:3000"
             value: "http://host.docker.internal:11434"
+          - name: VOTES_DB
+            value: "/app/data/votes.db"
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
         resources:
           requests:
             memory: "512Mi"
@@ -48,4 +53,8 @@ spec:
             port: 8501
           initialDelaySeconds: 10
           periodSeconds: 5
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: chat-app-pvc
 
