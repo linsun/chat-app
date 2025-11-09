@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chat-app-pvc
+  namespace: music
+  labels:
+    app: chat-app
+spec:
+  accessModes:
+    - ReadWriteMany  # Required for multiple replicas to share the volume
+  resources:
+    requests:
+      storage: 1Gi
+  # storageClassName: ""  # Uncomment and set if you need a specific storage class
+

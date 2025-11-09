@@ -2,8 +2,8 @@ apiVersion: v2
 name: chat-app
 description: A Helm chart for the Chat App with music voting functionality
 type: application
-version: 0.2.0
-appVersion: "v3"
+version: 0.1.0
+appVersion: "v2"
 keywords:
   - streamlit
   - chat
@@ -14,9 +14,5 @@ sources:
   - https://github.com/linsun/chat-app
 maintainers:
   - name: linsun
-dependencies:
-  - name: redis
-    version: 22.0.7
-    repository: https://charts.bitnami.com/bitnami
-    condition: redis.enabled
+dependencies: []
 
