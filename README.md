@@ -117,7 +117,7 @@ kubectl apply -f k8s/service-chat-app.yaml
 #### Option 1: Port Forward
 
 ```bash
-kubectl port-forward -n music service/chat-app-service 8080:80
+kubectl port-forward -n chat-spotify service/chat-app-service 8080:80
 ```
 
 Access at: `http://localhost:8080`
